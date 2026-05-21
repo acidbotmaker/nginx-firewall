@@ -23,6 +23,7 @@ services:
       DB_PATH: /data/firewall.db
       SECRET_KEY: ${SECRET_KEY}
       ALLOWLIST_PATH: /etc/nginx/dynamic/allowlist.conf
+      APP_ENV: ${APP_ENV:-PROD}
     ports:
       - "${ADMIN_BIND:-127.0.0.1:8080}:8080"
     volumes:

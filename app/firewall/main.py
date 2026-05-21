@@ -17,7 +17,12 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-app = FastAPI(title="nginx-firewall", docs_url=None, redoc_url=None)
+app = FastAPI(
+    title="nginx-firewall",
+    docs_url="/docs" if settings.is_dev else None,
+    redoc_url="/redoc" if settings.is_dev else None,
+    openapi_url="/openapi.json" if settings.is_dev else None,
+)
 
 if not settings.secret_key:
     raise RuntimeError("SECRET_KEY env var is required")
