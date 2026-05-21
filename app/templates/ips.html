@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}IP whitelist &middot; nginx-firewall{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>IP whitelist</h1>
+  <p class="muted">Only enabled entries are allowed through. Both single IPs and CIDR ranges are accepted (e.g. <code>10.0.0.0/24</code>).</p>
+
+  <form id="add-form" class="row">
+    <input type="text" name="value" placeholder="1.2.3.4 or 10.0.0.0/24" required />
+    <input type="text" name="label" placeholder="label (optional)" />
+    <label class="checkbox"><input type="checkbox" name="enabled" checked /> enabled</label>
+    <button type="submit" class="primary">Add</button>
+  </form>
+  <p id="add-error" class="error hidden"></p>
+
+  <table id="ips-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Value</th>
+        <th>Label</th>
+        <th>Enabled</th>
+        <th>Created</th>
+        <th>Updated</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</section>
+
+<script>
+async function load() {
+  const r = await fetch('/api/ips', {credentials: 'same-origin'});
+  if (!r.ok) { location.href = '/login'; return; }
+  const rows = await r.json();
+  const tbody = document.querySelector('#ips-table tbody');
+  tbody.innerHTML = '';
+  for (const e of rows) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${e.id}</td>
+      <td><code>${e.value}</code></td>
+      <td>${escapeHtml(e.label || '')}</td>
+      <td><input type="checkbox" ${e.enabled ? 'checked' : ''} data-id="${e.id}" class="toggle" /></td>
+      <td class="muted small">${e.created_at}</td>
+      <td class="muted small">${e.updated_at}</td>
+      <td><button class="danger" data-del="${e.id}">Delete</button></td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+document.getElementById('add-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const fd = new FormData(ev.target);
+  const body = {
+    value: fd.get('value'),
+    label: fd.get('label') || null,
+    enabled: fd.get('enabled') === 'on',
+  };
+  const err = document.getElementById('add-error');
+  err.classList.add('hidden');
+  const r = await fetch('/api/ips', {
+    method: 'POST', credentials: 'same-origin',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({detail: r.statusText}));
+    err.textContent = j.detail || 'Error';
+    err.classList.remove('hidden');
+    return;
+  }
+  ev.target.reset();
+  ev.target.querySelector('[name=enabled]').checked = true;
+  load();
+});
+
+document.addEventListener('click', async (ev) => {
+  const delId = ev.target.getAttribute('data-del');
+  if (delId) {
+    if (!confirm('Delete this entry?')) return;
+    await fetch(`/api/ips/${delId}`, {method: 'DELETE', credentials: 'same-origin'});
+    load();
+  }
+});
+
+document.addEventListener('change', async (ev) => {
+  if (!ev.target.classList.contains('toggle')) return;
+  const id = ev.target.getAttribute('data-id');
+  await fetch(`/api/ips/${id}`, {
+    method: 'PUT', credentials: 'same-origin',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({enabled: ev.target.checked}),
+  });
+  load();
+});
+
+load();
+</script>
+{% endblock %}

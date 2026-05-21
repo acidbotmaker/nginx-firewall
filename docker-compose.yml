@@ -1,0 +1,35 @@
+services:
+  nginx:
+    build: ./nginx
+    restart: unless-stopped
+    environment:
+      UPSTREAM_HOST: ${UPSTREAM_HOST}
+      TARGET_TCP: ${TARGET_TCP}
+      TARGET_UDP: ${TARGET_UDP}
+      EXTERNAL_TCP: ${EXTERNAL_TCP}
+      EXTERNAL_UDP: ${EXTERNAL_UDP}
+    ports:
+      - "${EXTERNAL_TCP}:${EXTERNAL_TCP}/tcp"
+      - "${EXTERNAL_UDP}:${EXTERNAL_UDP}/udp"
+    volumes:
+      - nginx-dynamic:/etc/nginx/dynamic
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  fastapi:
+    build: ./app
+    restart: unless-stopped
+    environment:
+      DB_PATH: /data/firewall.db
+      SECRET_KEY: ${SECRET_KEY}
+      ALLOWLIST_PATH: /etc/nginx/dynamic/allowlist.conf
+    ports:
+      - "${ADMIN_BIND:-127.0.0.1:8080}:8080"
+    volumes:
+      - ./data:/data
+      - nginx-dynamic:/etc/nginx/dynamic
+    depends_on:
+      - nginx
+
+volumes:
+  nginx-dynamic:

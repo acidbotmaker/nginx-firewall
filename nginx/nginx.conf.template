@@ -1,0 +1,33 @@
+user  nginx;
+worker_processes  auto;
+
+error_log  /var/log/nginx/error.log notice;
+pid        /var/run/nginx.pid;
+
+events {
+    worker_connections  1024;
+}
+
+stream {
+    log_format  basic  '$remote_addr [$time_local] '
+                       '$protocol $status $bytes_sent $bytes_received '
+                       '$session_time';
+    access_log /var/log/nginx/stream-access.log basic;
+
+    # TCP passthrough: public EXTERNAL_TCP -> upstream TARGET_TCP
+    server {
+        listen ${EXTERNAL_TCP};
+        include /etc/nginx/dynamic/allowlist.conf;
+        proxy_pass ${UPSTREAM_HOST}:${TARGET_TCP};
+        proxy_connect_timeout 5s;
+    }
+
+    # UDP passthrough: public EXTERNAL_UDP -> upstream TARGET_UDP
+    server {
+        listen ${EXTERNAL_UDP} udp;
+        include /etc/nginx/dynamic/allowlist.conf;
+        proxy_pass ${UPSTREAM_HOST}:${TARGET_UDP};
+        proxy_timeout 30s;
+        proxy_responses 0;
+    }
+}

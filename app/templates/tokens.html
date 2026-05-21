@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}API tokens &middot; nginx-firewall{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>API tokens</h1>
+  <p class="muted">Use a token via <code>Authorization: Bearer &lt;token&gt;</code>. Tokens are shown <strong>once only</strong> at creation; revoke and regenerate if lost.</p>
+
+  <form id="new-form" class="row">
+    <input type="text" name="name" placeholder="Token name (e.g. ci-bot)" required />
+    <button type="submit" class="primary">Create token</button>
+  </form>
+
+  <div id="new-token" class="banner hidden">
+    <strong>New token (save now):</strong>
+    <code id="new-token-value"></code>
+    <button type="button" id="copy-token">Copy</button>
+  </div>
+
+  <table id="tokens-table">
+    <thead>
+      <tr><th>ID</th><th>Name</th><th>Created</th><th>Last used</th><th></th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</section>
+
+<script>
+async function load() {
+  const r = await fetch('/api/tokens', {credentials: 'same-origin'});
+  if (!r.ok) { location.href = '/login'; return; }
+  const rows = await r.json();
+  const tbody = document.querySelector('#tokens-table tbody');
+  tbody.innerHTML = '';
+  for (const t of rows) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${t.id}</td>
+      <td>${escapeHtml(t.name)}</td>
+      <td class="muted small">${t.created_at}</td>
+      <td class="muted small">${t.last_used_at || '—'}</td>
+      <td><button class="danger" data-del="${t.id}">Revoke</button></td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+document.getElementById('new-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const fd = new FormData(ev.target);
+  const r = await fetch('/api/tokens', {
+    method: 'POST', credentials: 'same-origin',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name: fd.get('name')}),
+  });
+  if (!r.ok) { alert('Failed to create token'); return; }
+  const j = await r.json();
+  const box = document.getElementById('new-token');
+  document.getElementById('new-token-value').textContent = j.token;
+  box.classList.remove('hidden');
+  ev.target.reset();
+  load();
+});
+
+document.getElementById('copy-token').addEventListener('click', () => {
+  const v = document.getElementById('new-token-value').textContent;
+  navigator.clipboard.writeText(v);
+});
+
+document.addEventListener('click', async (ev) => {
+  const id = ev.target.getAttribute('data-del');
+  if (!id) return;
+  if (!confirm('Revoke this token?')) return;
+  await fetch(`/api/tokens/${id}`, {method: 'DELETE', credentials: 'same-origin'});
+  load();
+});
+
+load();
+</script>
+{% endblock %}
