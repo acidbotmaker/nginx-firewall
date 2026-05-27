@@ -11,7 +11,8 @@
     <div class="brand">nginx-firewall</div>
     {% if request.session.get('admin') %}
     <nav>
-      <a href="/" class="{% if active == 'ips' %}active{% endif %}">IP whitelist</a>
+      <a href="/" class="{% if active == 'services' %}active{% endif %}">Services</a>
+      <a href="/ips" class="{% if active == 'ips' %}active{% endif %}">IP whitelist</a>
       <a href="/tokens" class="{% if active == 'tokens' %}active{% endif %}">API tokens</a>
       <form method="post" action="/logout" class="inline">
         <button type="submit" class="link">Log out</button>

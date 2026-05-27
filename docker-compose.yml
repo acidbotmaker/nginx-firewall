@@ -2,17 +2,22 @@ services:
   nginx:
     build: ./nginx
     restart: unless-stopped
-    environment:
-      UPSTREAM_HOST: ${UPSTREAM_HOST}
-      TARGET_TCP: ${TARGET_TCP}
-      TARGET_UDP: ${TARGET_UDP}
-      EXTERNAL_TCP: ${EXTERNAL_TCP}
-      EXTERNAL_UDP: ${EXTERNAL_UDP}
-    ports:
-      - "${EXTERNAL_TCP}:${EXTERNAL_TCP}/tcp"
-      - "${EXTERNAL_UDP}:${EXTERNAL_UDP}/udp"
+    # Host networking so nginx can listen on whatever external ports you add
+    # via the UI without re-publishing ports in this file. This is the only
+    # way arbitrary, DB-managed ports go live without a compose change.
+    # NOTE: host networking is a Linux feature. On Docker Desktop (macOS /
+    # Windows) comment this out and use the `ports:` block below instead,
+    # listing each external port you intend to use (UI changes to new ports
+    # then require editing this list + `docker compose up -d`).
+    # network_mode: host   # DISABLED on macOS/Windows (Podman/Docker Desktop):
+    #   it binds the Linux VM, not your host, and silently disables `ports:`.
+    #   Keep it commented and publish each external port below instead.
     volumes:
       - nginx-dynamic:/etc/nginx/dynamic
+    # --- bridge-network fallback (macOS/Windows): list every external port a
+    # --- service uses. Adding a service on a new port means editing this list.
+    ports:
+      - "8005:8005/tcp"
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -22,7 +27,7 @@ services:
     environment:
       DB_PATH: /data/firewall.db
       SECRET_KEY: ${SECRET_KEY}
-      ALLOWLIST_PATH: /etc/nginx/dynamic/allowlist.conf
+      DYNAMIC_DIR: /etc/nginx/dynamic
       APP_ENV: ${APP_ENV:-PROD}
     ports:
       - "${ADMIN_BIND:-127.0.0.1:8080}:8080"

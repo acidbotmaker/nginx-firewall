@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Services &middot; nginx-firewall{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Services</h1>
+  <p class="muted">Each service publishes a public port (<code>external</code>) and forwards allowed traffic to an upstream host/port (<code>target</code>). Disabled services are not published. Manage who may reach each one on the <a href="/ips">IP whitelist</a> page.</p>
+
+  <form id="add-form" class="row">
+    <input type="text" name="name" placeholder="name (e.g. ssh)" required />
+    <input type="text" name="upstream_host" placeholder="upstream host" value="127.0.0.1" required />
+    <select name="protocol">
+      <option value="tcp">tcp</option>
+      <option value="udp">udp</option>
+    </select>
+    <input type="number" name="external_port" placeholder="external" min="1" max="65535" required />
+    <input type="number" name="target_port" placeholder="target" min="1" max="65535" required />
+    <label class="checkbox"><input type="checkbox" name="enabled" checked /> enabled</label>
+    <button type="submit" class="primary">Add</button>
+  </form>
+  <p id="add-error" class="error hidden"></p>
+
+  <table id="svc-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Name</th>
+        <th>Proto</th>
+        <th>External</th>
+        <th>Upstream</th>
+        <th>Enabled</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</section>
+
+<script>
+async function load() {
+  const r = await fetch('/api/services', {credentials: 'same-origin'});
+  if (!r.ok) { location.href = '/login'; return; }
+  const rows = await r.json();
+  const tbody = document.querySelector('#svc-table tbody');
+  tbody.innerHTML = '';
+  for (const s of rows) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${s.id}</td>
+      <td>${escapeHtml(s.name)}</td>
+      <td>${s.protocol}</td>
+      <td><code>${s.external_port}</code></td>
+      <td><code>${escapeHtml(s.upstream_host)}:${s.target_port}</code></td>
+      <td><input type="checkbox" ${s.enabled ? 'checked' : ''} data-id="${s.id}" class="toggle" /></td>
+      <td><button class="danger" data-del="${s.id}">Delete</button></td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+document.getElementById('add-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const fd = new FormData(ev.target);
+  const body = {
+    name: fd.get('name'),
+    upstream_host: fd.get('upstream_host'),
+    protocol: fd.get('protocol'),
+    external_port: parseInt(fd.get('external_port'), 10),
+    target_port: parseInt(fd.get('target_port'), 10),
+    enabled: fd.get('enabled') === 'on',
+  };
+  const err = document.getElementById('add-error');
+  err.classList.add('hidden');
+  const r = await fetch('/api/services', {
+    method: 'POST', credentials: 'same-origin',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({detail: r.statusText}));
+    err.textContent = (j.detail && j.detail.length) ? (typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail)) : 'Error';
+    err.classList.remove('hidden');
+    return;
+  }
+  ev.target.reset();
+  ev.target.querySelector('[name=upstream_host]').value = '127.0.0.1';
+  ev.target.querySelector('[name=enabled]').checked = true;
+  load();
+});
+
+document.addEventListener('click', async (ev) => {
+  const delId = ev.target.getAttribute('data-del');
+  if (!delId) return;
+  if (!confirm('Delete this service and all its IP rules?')) return;
+  await fetch(`/api/services/${delId}`, {method: 'DELETE', credentials: 'same-origin'});
+  load();
+});
+
+document.addEventListener('change', async (ev) => {
+  if (!ev.target.classList.contains('toggle')) return;
+  const id = ev.target.getAttribute('data-id');
+  await fetch(`/api/services/${id}`, {
+    method: 'PUT', credentials: 'same-origin',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({enabled: ev.target.checked}),
+  });
+  load();
+});
+
+load();
+</script>
+{% endblock %}

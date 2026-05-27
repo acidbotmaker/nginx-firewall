@@ -62,7 +62,7 @@ h1 { margin-top: 0; font-size: 18px; }
 }
 .row input[type=text] { flex: 1; min-width: 140px; }
 
-input[type=text], input[type=password] {
+input[type=text], input[type=password], input[type=number], select {
   background: #0a0d12;
   color: var(--text);
   border: 1px solid var(--border);
@@ -70,6 +70,8 @@ input[type=text], input[type=password] {
   padding: 7px 10px;
   font: inherit;
 }
+input[type=number] { width: 110px; }
+.row select { min-width: 120px; }
 
 label { display: block; margin: 8px 0; }
 label.checkbox { display: inline-flex; align-items: center; gap: 6px; }

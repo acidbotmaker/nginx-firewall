@@ -20,6 +20,15 @@ def _is_logged_in(request: Request) -> bool:
 def index(request: Request):
     if not _is_logged_in(request):
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+    return templates.TemplateResponse(
+        "services.html", {"request": request, "active": "services"}
+    )
+
+
+@router.get("/ips", response_class=HTMLResponse)
+def ips_page(request: Request):
+    if not _is_logged_in(request):
+        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
     return templates.TemplateResponse("ips.html", {"request": request, "active": "ips"})
 
 

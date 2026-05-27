@@ -8,7 +8,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from .auth import ensure_admin_password
 from .config import settings
 from .db import init_db
-from .nginx import regenerate_allowlist
+from .nginx import regenerate
 from .routes import api as api_routes
 from .routes import ui as ui_routes
 
@@ -52,7 +52,7 @@ def on_startup() -> None:
         log.warning("Save it now. Reset later via the CLI if needed.")
         log.warning("=" * 60)
     try:
-        regenerate_allowlist()
-        log.info("Rebuilt nginx allowlist on startup")
+        regenerate()
+        log.info("Rebuilt nginx service config + allowlists on startup")
     except Exception as e:
-        log.warning("Could not write allowlist on startup: %s", e)
+        log.warning("Could not write nginx config on startup: %s", e)
