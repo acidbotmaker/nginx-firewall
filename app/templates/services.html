@@ -36,30 +36,70 @@
 </section>
 
 <script>
+let services = [];
+let editingId = null;
+
 async function load() {
   const r = await fetch('/api/services', {credentials: 'same-origin'});
   if (!r.ok) { location.href = '/login'; return; }
-  const rows = await r.json();
+  services = await r.json();
+  render();
+}
+
+function render() {
   const tbody = document.querySelector('#svc-table tbody');
   tbody.innerHTML = '';
-  for (const s of rows) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${s.id}</td>
-      <td>${escapeHtml(s.name)}</td>
-      <td>${s.protocol}</td>
-      <td><code>${s.external_port}</code></td>
-      <td><code>${escapeHtml(s.upstream_host)}:${s.target_port}</code></td>
-      <td><input type="checkbox" ${s.enabled ? 'checked' : ''} data-id="${s.id}" class="toggle" /></td>
-      <td><button class="danger" data-del="${s.id}">Delete</button></td>
-    `;
-    tbody.appendChild(tr);
+  for (const s of services) {
+    tbody.appendChild(s.id === editingId ? editRow(s) : viewRow(s));
   }
+}
+
+function viewRow(s) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td>${s.id}</td>
+    <td>${escapeHtml(s.name)}</td>
+    <td>${s.protocol}</td>
+    <td><code>${s.external_port}</code></td>
+    <td><code>${escapeHtml(s.upstream_host)}:${s.target_port}</code></td>
+    <td><input type="checkbox" ${s.enabled ? 'checked' : ''} data-toggle="${s.id}" /></td>
+    <td>
+      <button data-edit="${s.id}">Edit</button>
+      <button class="danger" data-del="${s.id}">Delete</button>
+    </td>
+  `;
+  return tr;
+}
+
+function editRow(s) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td>${s.id}</td>
+    <td><input type="text" data-f="name" value="${escapeAttr(s.name)}" /></td>
+    <td>
+      <select data-f="protocol">
+        <option value="tcp" ${s.protocol === 'tcp' ? 'selected' : ''}>tcp</option>
+        <option value="udp" ${s.protocol === 'udp' ? 'selected' : ''}>udp</option>
+      </select>
+    </td>
+    <td><input type="number" data-f="external_port" value="${s.external_port}" min="1" max="65535" /></td>
+    <td>
+      <input type="text" data-f="upstream_host" value="${escapeAttr(s.upstream_host)}" placeholder="host" />
+      <input type="number" data-f="target_port" value="${s.target_port}" min="1" max="65535" />
+    </td>
+    <td><input type="checkbox" data-f="enabled" ${s.enabled ? 'checked' : ''} /></td>
+    <td>
+      <button class="primary" data-save="${s.id}">Save</button>
+      <button data-cancel="${s.id}">Cancel</button>
+    </td>
+  `;
+  return tr;
 }
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+function escapeAttr(s) { return escapeHtml(s); }
 
 document.getElementById('add-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
@@ -80,9 +120,7 @@ document.getElementById('add-form').addEventListener('submit', async (ev) => {
     body: JSON.stringify(body),
   });
   if (!r.ok) {
-    const j = await r.json().catch(() => ({detail: r.statusText}));
-    err.textContent = (j.detail && j.detail.length) ? (typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail)) : 'Error';
-    err.classList.remove('hidden');
+    showError(err, await r.json().catch(() => ({detail: r.statusText})));
     return;
   }
   ev.target.reset();
@@ -91,17 +129,64 @@ document.getElementById('add-form').addEventListener('submit', async (ev) => {
   load();
 });
 
+function showError(el, j) {
+  el.textContent = typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail || j);
+  el.classList.remove('hidden');
+}
+
 document.addEventListener('click', async (ev) => {
-  const delId = ev.target.getAttribute('data-del');
-  if (!delId) return;
-  if (!confirm('Delete this service and all its IP rules?')) return;
-  await fetch(`/api/services/${delId}`, {method: 'DELETE', credentials: 'same-origin'});
-  load();
+  const t = ev.target;
+  const editId = t.getAttribute('data-edit');
+  const cancelId = t.getAttribute('data-cancel');
+  const saveId = t.getAttribute('data-save');
+  const delId = t.getAttribute('data-del');
+
+  if (editId) {
+    editingId = parseInt(editId, 10);
+    render();
+    return;
+  }
+  if (cancelId) {
+    editingId = null;
+    render();
+    return;
+  }
+  if (saveId) {
+    const tr = t.closest('tr');
+    const get = name => tr.querySelector(`[data-f="${name}"]`);
+    const body = {
+      name: get('name').value,
+      upstream_host: get('upstream_host').value,
+      protocol: get('protocol').value,
+      external_port: parseInt(get('external_port').value, 10),
+      target_port: parseInt(get('target_port').value, 10),
+      enabled: get('enabled').checked,
+    };
+    const r = await fetch(`/api/services/${saveId}`, {
+      method: 'PUT', credentials: 'same-origin',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({detail: r.statusText}));
+      alert(typeof j.detail === 'string' ? j.detail : JSON.stringify(j.detail || j));
+      return;
+    }
+    editingId = null;
+    load();
+    return;
+  }
+  if (delId) {
+    if (!confirm('Delete this service and all its IP rules?')) return;
+    await fetch(`/api/services/${delId}`, {method: 'DELETE', credentials: 'same-origin'});
+    load();
+    return;
+  }
 });
 
 document.addEventListener('change', async (ev) => {
-  if (!ev.target.classList.contains('toggle')) return;
-  const id = ev.target.getAttribute('data-id');
+  const id = ev.target.getAttribute('data-toggle');
+  if (!id) return;
   await fetch(`/api/services/${id}`, {
     method: 'PUT', credentials: 'same-origin',
     headers: {'Content-Type': 'application/json'},
