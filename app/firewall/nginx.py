@@ -48,14 +48,17 @@ def render_services_conf(services: list[dict]) -> str:
         allow_path = settings.allowlist_path(s["id"])
         listen = str(s["external_port"])
         if s["protocol"] == "udp":
+            # No `proxy_responses` cap: most UDP protocols (ChirpStack packet
+            # forwarder, Wireguard, DNS) are bidirectional, and `proxy_responses 0`
+            # tells nginx to expect zero replies, which drops the ack/response
+            # path. `proxy_timeout` alone bounds session lifetime.
             block = (
                 f"# {s['name']} (udp)\n"
                 "server {\n"
                 f"    listen {listen} udp;\n"
                 f"    include {allow_path};\n"
                 f"    proxy_pass {s['upstream_host']}:{s['target_port']};\n"
-                "    proxy_timeout 30s;\n"
-                "    proxy_responses 0;\n"
+                "    proxy_timeout 60s;\n"
                 "}\n"
             )
         else:
